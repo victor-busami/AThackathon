@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import PropertyCard from './components/PropertyCard';
 import BookmarkedProperties from './components/BookmarkedProperties';
 import AdminLogin from './components/AdminLogin';
@@ -18,6 +18,7 @@ interface Property {
   agentPhoneNumber: string;
   createdAt: string;
   updatedAt: string;
+  status?: 'available' | 'booked';
 }
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
@@ -45,37 +46,31 @@ export default function Home() {
   const [adminToken, setAdminToken] = useState<string | null>(null);
   const [selectedLocation, setSelectedLocation] = useState<{ name: string; lat: number; lng: number } | null>(null);
 
-  useEffect(() => {
-    const id = getUserId();
-    setUserId(id);
-    
-    // Check if admin token exists in localStorage
-    const savedToken = localStorage.getItem('adminToken');
-    if (savedToken) {
-      setAdminToken(savedToken);
-    }
-    
-    fetchProperties();
-    if (mode === 'user') {
-      fetchBookmarks(id);
-    }
-  }, [mode]);
-
-  const fetchProperties = async () => {
+  // Fetch properties function
+  const fetchProperties = useCallback(async () => {
     try {
       const response = await fetch(`${API_URL}/api/properties`);
       if (response.ok) {
         const data = await response.json();
-        setProperties(data);
+        // Only show available properties for users
+        if (mode === 'user') {
+          const availableProperties = data.filter((prop: Property) => prop.status !== 'booked');
+          setProperties(availableProperties);
+        } else {
+          setProperties(data);
+        }
       }
     } catch (error) {
       console.error('Error fetching properties:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, [mode]);
 
-  const fetchBookmarks = async (id: number) => {
+  // Fetch bookmarks function
+  const fetchBookmarks = useCallback(async (id: number) => {
+    if (id === 0) return;
+    
     try {
       const response = await fetch(`${API_URL}/api/bookmarks`, {
         headers: {
@@ -84,15 +79,44 @@ export default function Home() {
       });
       if (response.ok) {
         const data = await response.json();
-        const ids = new Set(data.map((b: any) => b.propertyId));
+        const ids = new Set(data.map((b: { propertyId: number }) => b.propertyId));
         setBookmarkedIds(ids);
       }
     } catch (error) {
       console.error('Error fetching bookmarks:', error);
     }
-  };
+  }, []);
 
-  const handleBookmark = async (propertyId: number) => {
+  // Initialize user and fetch data
+  useEffect(() => {
+    const initUser = async () => {
+      const id = getUserId();
+      setUserId(id);
+      
+      // Check if admin token exists in localStorage
+      const savedToken = localStorage.getItem('adminToken');
+      if (savedToken) {
+        setAdminToken(savedToken);
+      }
+      
+      await fetchProperties();
+      
+      if (mode === 'user' && id !== 0) {
+        await fetchBookmarks(id);
+      }
+    };
+    
+    initUser();
+  }, [fetchProperties, fetchBookmarks, mode]);
+
+  // Refresh properties when mode changes
+  useEffect(() => {
+    if (mode === 'admin' && adminToken) {
+      fetchProperties();
+    }
+  }, [mode, adminToken, fetchProperties]);
+
+  const handleBookmark = useCallback(async (propertyId: number) => {
     if (userId === 0) return;
     
     try {
@@ -128,35 +152,41 @@ export default function Home() {
     } catch (error) {
       console.error('Error toggling bookmark:', error);
     }
-  };
+  }, [userId, bookmarkedIds]);
 
-  const handleAdminLogin = (token: string) => {
+  const handleAdminLogin = useCallback((token: string) => {
     setAdminToken(token);
     setMode('admin');
     setActiveTab('browse');
-  };
+  }, []);
 
-  const handleAdminLogout = () => {
+  const handleAdminLogout = useCallback(() => {
     setAdminToken(null);
     setMode('user');
     localStorage.removeItem('adminToken');
-  };
+  }, []);
 
-  const getFilteredProperties = () => {
+  const getFilteredProperties = useCallback(() => {
     if (!selectedLocation) return properties;
     
     // Filter properties by location name (case-insensitive partial match)
     return properties.filter(prop =>
       prop.location.toLowerCase().includes(selectedLocation.name.toLowerCase())
     );
-  };
+  }, [properties, selectedLocation]);
+
+  // Only show available properties for users
+  const displayProperties = getFilteredProperties();
+  
+  // Calculate available properties count for user mode
+  const availableCount = mode === 'user' ? displayProperties.length : properties.length;
 
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation */}
       <nav className="bg-white shadow">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <h1 className="text-3xl font-bold text-gray-900">Property Browser</h1>
+          <h1 className="text-3xl font-bold text-gray-900">Sasa house</h1>
           <div className="flex gap-4">
             <button
               onClick={() => setMode('user')}
@@ -202,7 +232,7 @@ export default function Home() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                Browse Properties
+                Browse Properties ({availableCount})
               </button>
               <button
                 onClick={() => setActiveTab('bookmarks')}
@@ -212,7 +242,7 @@ export default function Home() {
                     : 'text-gray-500 hover:text-gray-700'
                 }`}
               >
-                My Bookmarks
+                My Bookmarks ({bookmarkedIds.size})
               </button>
             </div>
 
@@ -241,19 +271,19 @@ export default function Home() {
 
                 {loading ? (
                   <p className="text-center text-gray-500">Loading properties...</p>
-                ) : getFilteredProperties().length === 0 ? (
+                ) : displayProperties.length === 0 ? (
                   <p className="text-center text-gray-500">
                     {selectedLocation
-                      ? `No properties found in ${selectedLocation.name}`
-                      : 'No properties found'}
+                      ? `No available properties found in ${selectedLocation.name}`
+                      : 'No available properties found'}
                   </p>
                 ) : (
                   <div>
                     <p className="text-sm text-gray-600 mb-4">
-                      Found {getFilteredProperties().length} properties
+                      Found {displayProperties.length} available properties
                     </p>
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                      {getFilteredProperties().map(property => (
+                      {displayProperties.map(property => (
                         <PropertyCard
                           key={property.id}
                           property={property}
