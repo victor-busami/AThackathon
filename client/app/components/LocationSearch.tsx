@@ -45,30 +45,6 @@ export default function LocationSearch({ onLocationChange, selectedLocation, pro
         </div>
 
         <div className="space-y-4">
-          {/* Quick Select Buttons */}
-          <div className="flex gap-2">
-            <button
-              onClick={() => handleLocationSelect({ name: 'Nairobi', lat: -1.2921, lng: 36.8219 })}
-              className={`flex-1 px-4 py-2 rounded transition text-sm font-medium ${
-                location?.name === 'Nairobi'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-              }`}
-            >
-              Nairobi
-            </button>
-            <button
-              onClick={() => handleLocationSelect({ name: 'Kiambu', lat: -1.01, lng: 36.65 })}
-              className={`flex-1 px-4 py-2 rounded transition text-sm font-medium ${
-                location?.name === 'Kiambu'
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-gray-100 text-gray-800 hover:bg-gray-200'
-              }`}
-            >
-              Kiambu
-            </button>
-          </div>
-
           {/* Selected Location Display */}
           {location && (
             <div className="bg-blue-50 border border-blue-200 rounded p-3 flex justify-between items-center">
