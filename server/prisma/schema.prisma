@@ -12,6 +12,15 @@ datasource db {
   provider = "postgresql"
 }
 
+model User {
+  id        Int       @id @default(autoincrement())
+  name      String?
+  email     String?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  bookmarks Bookmark[]
+}
+
 model Property {
   id          Int      @id @default(autoincrement())
   nameOfProperty String
@@ -22,6 +31,18 @@ model Property {
   agentPhoneNumber      String
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+  bookmarks   Bookmark[]
+}
+
+model Bookmark {
+  id        Int     @id @default(autoincrement())
+  userId    Int
+  propertyId Int
+  createdAt DateTime @default(now())
+  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  
+  @@unique([userId, propertyId])
 }
 
 
