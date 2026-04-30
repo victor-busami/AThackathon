@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useRef } from 'react';
-import L from 'leaflet';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
+import * as L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 
 // Fix for Leaflet marker icons in Next.js
@@ -28,6 +28,7 @@ export default function Map({ onLocationSelect, defaultCenter = [-1.3, 36.8], pr
   const map = useRef<L.Map | null>(null);
   const marker = useRef<L.Marker | null>(null);
   const propertyMarkers = useRef<L.Marker[]>([]);
+  const onLocationSelectRef = useRef(onLocationSelect);
 
   // Location coordinates for Nairobi and Kiambu
   const locationCoords: Record<string, [number, number]> = {
@@ -48,30 +49,78 @@ export default function Map({ onLocationSelect, defaultCenter = [-1.3, 36.8], pr
   );
 
   useEffect(() => {
-    if (!mapContainer.current) return;
+    onLocationSelectRef.current = onLocationSelect;
+  }, [onLocationSelect]);
 
-    // Initialize map
-    map.current = L.map(mapContainer.current).setView(defaultCenter, 10);
+  useLayoutEffect(() => {
+    if (!mapContainer.current || map.current) return;
 
-    // Add OpenStreetMap tiles
+    const mapInstance = L.map(mapContainer.current, {
+      center: defaultCenter,
+      zoom: 10,
+      zoomAnimation: false,
+      fadeAnimation: false,
+      markerZoomAnimation: false,
+      zoomControl: true,
+    });
+    map.current = mapInstance;
+
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
       attribution: '© OpenStreetMap contributors',
       maxZoom: 19,
-    }).addTo(map.current!);
+    }).addTo(mapInstance);
 
-    // Restrict map to bounds
-    map.current.setMaxBounds(bounds);
-    map.current.fitBounds(bounds);
+    mapInstance.setMaxBounds(bounds);
+    mapInstance.fitBounds(bounds, { animate: false });
+    setTimeout(() => mapInstance.invalidateSize(), 0);
 
-    // Display property markers
-    // Clear previous property markers
-    propertyMarkers.current.forEach(m => map.current?.removeLayer(m));
+    mapInstance.on('click', async (e: L.LeafletMouseEvent) => {
+      const { lat, lng } = e.latlng;
+
+      if (marker.current) {
+        mapInstance.removeLayer(marker.current);
+      }
+
+      const selectionIcon = L.divIcon({
+        html: `<div style="background-color: #ef4444; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">✓</div>`,
+        iconSize: [30, 30],
+        className: 'selection-marker',
+      });
+
+      marker.current = L.marker([lat, lng], { icon: selectionIcon }).addTo(mapInstance);
+
+      try {
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
+        );
+        const data = await response.json();
+        const locationName = data.address?.city || data.address?.county || data.address?.country || 'Selected Location';
+
+        onLocationSelectRef.current?.({ name: locationName, lat, lng });
+        marker.current?.bindPopup(`<b>${locationName}</b><br/>Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`).openPopup();
+      } catch (error) {
+        onLocationSelectRef.current?.({ name: 'Selected Location', lat, lng });
+        marker.current?.bindPopup(`<b>Selected Location</b><br/>Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`).openPopup();
+      }
+    });
+
+    return () => {
+      mapInstance.off();
+      mapInstance.remove();
+      propertyMarkers.current = [];
+      marker.current = null;
+      map.current = null;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!map.current) return;
+
+    propertyMarkers.current.forEach(marker => map.current?.removeLayer(marker));
     propertyMarkers.current = [];
 
     properties.forEach(property => {
-      const coords = locationCoords[property.location] || [-1.2921, 36.8219]; // Default to Nairobi
-      
-      // Create custom property marker icon (blue)
+      const coords = locationCoords[property.location] || [-1.2921, 36.8219];
       const propertyIcon = L.divIcon({
         html: `<div style="background-color: #3b82f6; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">P</div>`,
         iconSize: [30, 30],
@@ -90,51 +139,15 @@ export default function Map({ onLocationSelect, defaultCenter = [-1.3, 36.8], pr
           </p>
         </div>
       `);
-      
+
       propertyMarkers.current.push(propertyMarker);
     });
+  }, [properties]);
 
-    // Handle map clicks
-    map.current.on('click', async (e: L.LeafletMouseEvent) => {
-      const { lat, lng } = e.latlng;
-
-      // Remove old marker
-      if (marker.current) {
-        map.current?.removeLayer(marker.current);
-      }
-
-      // Create custom selection marker icon (red)
-      const selectionIcon = L.divIcon({
-        html: `<div style="background-color: #ef4444; color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; font-weight: bold; font-size: 12px; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.3);">✓</div>`,
-        iconSize: [30, 30],
-        className: 'selection-marker',
-      });
-
-      // Add new marker with red icon
-      marker.current = L.marker([lat, lng], { icon: selectionIcon }).addTo(map.current!);
-
-      // Try to get location name from reverse geocoding (using nominatim)
-      try {
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}`
-        );
-        const data = await response.json();
-        const locationName = data.address?.city || data.address?.county || data.address?.country || 'Selected Location';
-
-        onLocationSelect?.({ name: locationName, lat, lng });
-        marker.current.bindPopup(`<b>${locationName}</b><br/>Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`).openPopup();
-      } catch (error) {
-        onLocationSelect?.({ name: 'Selected Location', lat, lng });
-        marker.current.bindPopup(`<b>Selected Location</b><br/>Lat: ${lat.toFixed(4)}, Lng: ${lng.toFixed(4)}`).openPopup();
-      }
-    });
-
-    return () => {
-      if (map.current) {
-        map.current.remove();
-      }
-    };
-  }, [onLocationSelect, defaultCenter, properties]);
+  useEffect(() => {
+    if (!map.current) return;
+    map.current.setView(defaultCenter, map.current.getZoom());
+  }, [defaultCenter]);
 
   return <div ref={mapContainer} className="h-96 w-full" />;
 }

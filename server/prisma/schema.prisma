@@ -12,6 +12,13 @@ datasource db {
   provider = "postgresql"
 }
 
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  EXPIRED
+  CANCELED
+}
+
 model User {
   id        Int       @id @default(autoincrement())
   name      String?
@@ -19,30 +26,50 @@ model User {
   createdAt DateTime  @default(now())
   updatedAt DateTime  @updatedAt
   bookmarks Bookmark[]
+  bookings  Booking[]
 }
 
 model Property {
-  id          Int      @id @default(autoincrement())
-  nameOfProperty String
-  description String?
-  price       Float
-  location    String
-  type        String
-  agentPhoneNumber      String
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-  bookmarks   Bookmark[]
+  id               Int       @id @default(autoincrement())
+  nameOfProperty   String
+  description      String?
+  price            Float
+  location         String
+  type             String
+  agentPhoneNumber String
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+  bookmarks        Bookmark[]
+  bookings         Booking[]
 }
 
 model Bookmark {
-  id        Int     @id @default(autoincrement())
-  userId    Int
+  id         Int      @id @default(autoincrement())
+  userId     Int
   propertyId Int
-  createdAt DateTime @default(now())
-  user      User @relation(fields: [userId], references: [id], onDelete: Cascade)
-  property  Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
-  
+  createdAt  DateTime @default(now())
+  expiresAt  DateTime?
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property   Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
   @@unique([userId, propertyId])
+}
+
+model Booking {
+  id                Int           @id @default(autoincrement())
+  userId            Int
+  propertyId        Int
+  phoneNumber       String
+  status            BookingStatus @default(PENDING)
+  commitmentFeePaid Boolean       @default(false)
+  paymentReference  String?
+  createdAt         DateTime      @default(now())
+  expiresAt         DateTime
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId])
 }
 
 

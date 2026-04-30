@@ -19,12 +19,14 @@ interface BookmarkedPropertiesProps {
   properties: Property[];
   bookmarkedIds: Set<number>;
   onBookmark: (propertyId: number) => void;
+  onBook: (propertyId: number) => void;
 }
 
 export default function BookmarkedProperties({
   properties,
   bookmarkedIds,
   onBookmark,
+  onBook,
 }: BookmarkedPropertiesProps) {
   const bookmarkedProperties = properties.filter(p => bookmarkedIds.has(p.id));
 
@@ -51,6 +53,7 @@ export default function BookmarkedProperties({
             property={property}
             isBookmarked={bookmarkedIds.has(property.id)}
             onBookmark={onBookmark}
+            onBook={onBook}
           />
         ))}
       </div>
