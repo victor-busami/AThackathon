@@ -11,3 +11,17 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
+model Property {
+  id          Int      @id @default(autoincrement())
+  nameOfProperty String
+  description String?
+  price       Float
+  location    String
+  type        String
+  agentPhoneNumber      String
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+
