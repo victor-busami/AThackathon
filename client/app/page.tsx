@@ -5,7 +5,8 @@ import PropertyCard from './components/PropertyCard';
 import BookmarkedProperties from './components/BookmarkedProperties';
 import AdminLogin from './components/AdminLogin';
 import AdminUpload from './components/AdminUpload';
-import { Home as HomeIcon, Cog } from 'lucide-react';
+import LocationSearch from './components/LocationSearch';
+import { Home as HomeIcon, Cog, X } from 'lucide-react';
 
 interface Property {
   id: number;
@@ -42,6 +43,7 @@ export default function Home() {
   const [userId, setUserId] = useState<number>(0);
   const [mode, setMode] = useState<'user' | 'admin'>('user');
   const [adminToken, setAdminToken] = useState<string | null>(null);
+  const [selectedLocation, setSelectedLocation] = useState<{ name: string; lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     const id = getUserId();
@@ -140,6 +142,15 @@ export default function Home() {
     localStorage.removeItem('adminToken');
   };
 
+  const getFilteredProperties = () => {
+    if (!selectedLocation) return properties;
+    
+    // Filter properties by location name (case-insensitive partial match)
+    return properties.filter(prop =>
+      prop.location.toLowerCase().includes(selectedLocation.name.toLowerCase())
+    );
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Navigation */}
@@ -207,21 +218,50 @@ export default function Home() {
 
             {/* Browse Properties Tab */}
             {activeTab === 'browse' && (
-              <div>
+              <div className="space-y-6">
+                <LocationSearch
+                  selectedLocation={selectedLocation}
+                  onLocationChange={setSelectedLocation}
+                  properties={properties}
+                />
+
+                {selectedLocation && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex justify-between items-center">
+                    <p className="text-blue-800">
+                      Searching properties in <strong>{selectedLocation.name}</strong>
+                    </p>
+                    <button
+                      onClick={() => setSelectedLocation(null)}
+                      className="text-blue-600 hover:text-blue-800 transition"
+                    >
+                      <X size={20} />
+                    </button>
+                  </div>
+                )}
+
                 {loading ? (
                   <p className="text-center text-gray-500">Loading properties...</p>
-                ) : properties.length === 0 ? (
-                  <p className="text-center text-gray-500">No properties found</p>
+                ) : getFilteredProperties().length === 0 ? (
+                  <p className="text-center text-gray-500">
+                    {selectedLocation
+                      ? `No properties found in ${selectedLocation.name}`
+                      : 'No properties found'}
+                  </p>
                 ) : (
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {properties.map(property => (
-                      <PropertyCard
-                        key={property.id}
-                        property={property}
-                        isBookmarked={bookmarkedIds.has(property.id)}
-                        onBookmark={handleBookmark}
-                      />
-                    ))}
+                  <div>
+                    <p className="text-sm text-gray-600 mb-4">
+                      Found {getFilteredProperties().length} properties
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                      {getFilteredProperties().map(property => (
+                        <PropertyCard
+                          key={property.id}
+                          property={property}
+                          isBookmarked={bookmarkedIds.has(property.id)}
+                          onBookmark={handleBookmark}
+                        />
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>
